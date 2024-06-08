@@ -114,13 +114,36 @@ def create_sphere(reference_point, radius, step=1.0):
     Returns:
     list: A list of coordinates representing the centers of the mini spheres.
     """
-    x0, y0, z0 = reference_point['x_coordinate'], reference_point['y_coordinate'], reference_point['z_coordinate']
-    mini_spheres = []
-    for x in np.arange(x0 - radius, x0 + radius, step):
-        for y in np.arange(y0 - radius, y0 + radius, step):
-            for z in np.arange(z0 - radius, z0 + radius, step):
-                if math.sqrt((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2) <= radius:
-                    mini_spheres.append((x, y, z))
+
+    x0 = reference_point['x_coordinate']
+    y0 = reference_point['y_coordinate']
+    z0 = reference_point['z_coordinate']
+
+    x_grid = np.arange(x0 - radius, x0 + radius, step)
+    y_grid = np.arange(y0 - radius, y0 + radius, step)
+    z_grid = np.arange(z0 - radius, z0 + radius, step)
+
+    mini_spheres_total = []
+    for x in x_grid:
+        for y in y_grid:
+            for z in z_grid:
+                mini_spheres_total.append((x, y, z))
+
+    mini_spheres_total = np.array(mini_spheres_total)
+
+    dr2 = np.sum(np.square(mini_spheres_total - np.array([x0, y0, z0])),
+                 axis=1)
+    dist_to_rp = np.sqrt(dr2)
+
+    mini_spheres_and_dist = np.c_[mini_spheres_total, dist_to_rp]
+
+    mini_spheres = mini_spheres_total[np.where(
+        mini_spheres_and_dist[:, -1] <= radius)[0]]
+    # for x in np.arange(x0 - radius, x0 + radius, step):
+    #     for y in np.arange(y0 - radius, y0 + radius, step):
+    #         for z in np.arange(z0 - radius, z0 + radius, step):
+    #             if math.sqrt((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2) <= radius:
+    #                 mini_spheres.append((x, y, z))
     return mini_spheres
 
 def calculate_intersection_volume(radius1, radius2, distance):
