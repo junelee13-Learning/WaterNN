@@ -41,13 +41,48 @@ def parse_pdb_file(file_path):
                 })
     return np.array(coordinates), atoms
 
-def create_grid(min_coord, max_coord, step=1.0):
-    print("Creating grid points within the defined box...")
-    x_range = np.arange(min_coord[0], max_coord[0] + step, step)
-    y_range = np.arange(min_coord[1], max_coord[1] + step, step)
-    z_range = np.arange(min_coord[2], max_coord[2] + step, step)
-    grid_points = np.array(np.meshgrid(x_range, y_range, z_range)).T.reshape(-1, 3)
-    return grid_points
+def create_grid(min_coord, max_coord, atoms, step=1.0, exclusion_distance=0.8):
+    print("Creating grid points within the defined box...") # Stacking planes over using 3D meshgrid, seems to have problems with larger boxes for some reason. may be a problem caused from poorly indexed PDB Format.
+    grid_points = []
+
+    for z in np.arange(min_coord[2], max_coord[2] + step, step):
+        x_range = np.arange(min_coord[0], max_coord[0] + step, step)
+        y_range = np.arange(min_coord[1], max_coord[1] + step, step)
+        xy_plane = np.array(np.meshgrid(x_range, y_range)).T.reshape(-1, 2)
+        for xy in xy_plane:
+            grid_points.append([xy[0], xy[1], z])
+
+    grid_points = np.array(grid_points)
+
+    print(f"Total grid points before filtering: {len(grid_points)}")
+
+    # Convert atoms to a numpy array for faster computation
+    atom_coords = np.array([[atom['x_coordinate'], atom['y_coordinate'], atom['z_coordinate']] for atom in atoms if atom['element_symbol'] != 'H'])
+
+    # Filter out grid points that are too close to any atom except hydrogen
+    filtered_grid_points = []
+    for i, point in enumerate(grid_points):
+        if i % 10000 == 0:
+            print(f"Processing grid point {i+1}/{len(grid_points)}...")
+
+        distances = np.linalg.norm(atom_coords - point, axis=1)
+        if np.all(distances >= exclusion_distance):
+            filtered_grid_points.append(point)
+            
+    # 3D meshgrid method for original grid
+    # x_range = np.arange(min_coord[0], max_coord[0] + step, step)
+    # y_range = np.arange(min_coord[1], max_coord[1] + step, step)
+    # z_range = np.arange(min_coord[2], max_coord[2] + step, step)
+    # grid_points = np.array(np.meshgrid(x_range, y_range, z_range)).T.reshape(-1, 3)
+    
+    return np.array(filtered_grid_points), grid_points
+
+    
+    # x_range = np.arange(min_coord[0], max_coord[0] + step, step)
+    # y_range = np.arange(min_coord[1], max_coord[1] + step, step)
+    # z_range = np.arange(min_coord[2], max_coord[2] + step, step)
+    # grid_points = np.array(np.meshgrid(x_range, y_range, z_range)).T.reshape(-1, 3)
+
 
 def create_sphere(x0, y0, z0, radius, step=1.0):
     mini_spheres = []
@@ -197,8 +232,9 @@ if __name__ == "__main__":
     print(f"Reference points saved to {reference_points_output_path}")
 
     # Create a grid within the defined box
-    grid_points = create_grid(min_coord, max_coord, step=1.0)
-    print(f"Generated {len(grid_points)} grid points.")
+    filtered_grid_points, unfiltered_grid_points = create_grid(min_coord, max_coord, atoms, step=1.0, exclusion_distance=0.8)
+    print(f"Generated {len(filtered_grid_points)} filtered grid points.")
+    print(f"Generated {len(unfiltered_grid_points)} unfiltered grid points.")
 
     # Load the trained model
     model = load_trained_model(model_path)
@@ -207,10 +243,10 @@ if __name__ == "__main__":
     all_predictions = []    
 
     # Generate spheres and make predictions
-    num_grid_points = len(grid_points)
-    for i, grid_point in enumerate(grid_points):
-        print(f"Processing grid point {i+1}/{num_grid_points}...")
-        x0, y0, z0 = grid_point
+    num_filtered_grid_points = len(filtered_grid_points)
+    for i, filtered_grid_point in enumerate(filtered_grid_points):
+        print(f"Processing filtered grid point {i+1}/{num_filtered_grid_points}...")
+        x0, y0, z0 = filtered_grid_point
         mini_spheres = create_sphere(x0, y0, z0, radius=3.5, step=1.0)
 
         mini_sphere_radius = (3 * 1 / (4 * math.pi)) ** (1/3)
